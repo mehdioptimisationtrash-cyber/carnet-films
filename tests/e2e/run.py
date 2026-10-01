@@ -40,9 +40,7 @@ def omdb(route):
         body = DB[q["i"]]
     elif "t" in q:
         t = q["t"].lower()
-        alias = {"le parrain": "tt0068646"}
         hits = [v for v in DB.values() if v["Title"].lower() == t and (not q.get("y") or v["Year"].startswith(q["y"]))]
-        if t in alias: hits = [DB[alias[t]]]
         if hits: body = hits[0]
     elif "s" in q:
         s = q["s"].lower()
@@ -82,6 +80,10 @@ with sync_playwright() as p:
     # Recherche
     page.fill(".search-input", "dune")
     page.wait_for_selector(".result >> text=Dune")
+    page.fill(".search-input", "les évadés")
+    page.wait_for_selector(".result strong >> text=Les Évadés", timeout=20000)  # recherche par titre français
+    page.fill(".search-input", "dune")
+    page.wait_for_selector(".result >> text=Dune")
     page.wait_for_selector(".result .chip.rt")
     page.screenshot(path=str(OUT / "02-recherche.png"), full_page=True)
     page.click(".result:first-child .add")
@@ -97,7 +99,9 @@ with sync_playwright() as p:
     page.click(".import-cta")
     page.fill(".import-text", "Inception\nLe Parrain (1972)\nThe Bear\n- Dune 2021\nhttps://www.imdb.com/title/tt0111161/\nFilm qui n'existe pas\nFight Club")
     page.click("text=Rechercher ces titres")
-    page.wait_for_selector(".imp.found"); page.wait_for_selector(".imp.pending", state="detached")
+    page.wait_for_selector(".imp.found"); page.wait_for_selector(".imp.pending", state="detached", timeout=60000)
+    page.wait_for_selector(".imp strong >> text=Les Évadés", timeout=20000)  # titre français via Wikidata
+    assert page.locator(".imp strong >> text=Le Parrain").count() == 1, "Le Parrain retrouvé par son titre français"
     page.screenshot(path=str(OUT / "04-import.png"), full_page=False)
     assert page.locator(".imp.missing").count() == 1, "une ligne introuvable attendue"
     page.fill(".imp.missing input", "Fight Club")
@@ -117,8 +121,9 @@ with sync_playwright() as p:
     # Tri par RT, filtre séries
     page.click("summary")
     page.select_option(".select:has-text('Trier par') select", "rt")
+    page.wait_for_selector(".card-title >> text=Le Parrain", timeout=30000)  # enrichissement en arrière-plan
     first = page.locator(".grid .card-title").first.inner_text()
-    assert first == "The Godfather", first
+    assert first == "Le Parrain", first
     page.click(".segmented >> text=Séries")
     assert page.locator(".grid .card").count() == 1
     page.click(".segmented[aria-label=Type] >> text=Tout")
@@ -126,6 +131,8 @@ with sync_playwright() as p:
     # Fiche du carnet : marquer vu + note + commentaire
     page.click(".card:has-text('Inception')")
     page.wait_for_selector(".personal")
+    page.wait_for_selector(".synopsis >> text=rêve partagé", timeout=20000)
+    page.screenshot(path=str(OUT / "06b-synopsis.png"))
     page.fill(".personal textarea", "Conseillé par Julie")
     page.click("text=Marquer comme vu")
     page.click(".star >> nth=3")
@@ -156,8 +163,8 @@ with sync_playwright() as p:
     dp.evaluate("data => localStorage.setItem('carnet-films:v1', JSON.stringify(data))", {**data, "view": {**data["view"], "status": "all"}})
     dp.reload(); dp.wait_for_selector(".grid .card")
     dp.screenshot(path=str(OUT / "07-desktop-sombre.png"), full_page=True)
-    dp.click(".card:has-text('Godfather')"); dp.wait_for_selector(".scores")
-    dp.screenshot(path=str(OUT / "08-fiche-desktop.png"))
+    dp.click(".card:has-text('Le Parrain')"); dp.wait_for_selector(".synopsis >> text=Corleone", timeout=20000)
+    dp.wait_for_timeout(600); dp.screenshot(path=str(OUT / "08-fiche-desktop.png"))
     # pas de débordement horizontal sur petit écran
     sp = browser.new_context(viewport={"width": 320, "height": 640}, service_workers="block", bypass_csp=True).new_page()
     sp.goto(BASE)

@@ -1,5 +1,5 @@
 // Petits outils d'interface : création d'éléments sûre (pas d'innerHTML), feuilles, toasts, badges de notes.
-import { posterUrl, rtState, TYPE_LABELS } from './model.js';
+import { displayTitle, posterUrl, rtState, TYPE_LABELS } from './model.js';
 
 /** h('div.card', { onclick }, ...enfants) — le texte est toujours inséré comme texte. */
 export function h(tag, props = {}, ...children) {
@@ -67,11 +67,12 @@ export function scoreChips(ratings = {}, { compact = false } = {}) {
 
 /** Jaquette avec repli (titre écrit) si l'image manque ou ne charge pas. */
 export function poster(title, { width = 300, eager = false } = {}) {
-  const fallback = h('div.poster-fallback', { 'aria-hidden': 'true' }, h('span', {}, title.title), h('small', {}, title.year ?? ''));
+  const name = displayTitle(title);
+  const fallback = h('div.poster-fallback', { 'aria-hidden': 'true' }, h('span', {}, name), h('small', {}, title.year ?? ''));
   const src = posterUrl(title.poster, width);
   if (!src) return h('div.poster', {}, fallback);
   const img = h('img', {
-    src, alt: `Affiche de ${title.title}`, loading: eager ? 'eager' : 'lazy', decoding: 'async', width: 300, height: 444,
+    src, alt: `Affiche de ${name}`, loading: eager ? 'eager' : 'lazy', decoding: 'async', width: 300, height: 444,
     referrerPolicy: 'no-referrer',
     onerror: () => img.replaceWith(fallback),
   });

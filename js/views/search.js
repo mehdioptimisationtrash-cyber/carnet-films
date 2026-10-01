@@ -2,18 +2,21 @@
 import { h, poster, scoreChips, toast, typeLabel } from '../ui.js';
 import * as store from '../store.js';
 import * as omdb from '../omdb.js';
+import { findByFrenchTitle, frenchTitles } from '../french.js';
 import { openDetail } from './detail.js';
 import { openImport } from './import.js';
 
 const DEBOUNCE_MS = 450;
 const RATINGS_AT_ONCE = 4;
+const NO_RESULT = 'Aucun résultat. Vérifie l’orthographe, ou colle le lien IMDb du titre.';
 
 // Gardé entre deux affichages de l'onglet.
-let last = { query: '', type: '', results: [], total: 0, page: 1, ratings: {} };
+let last = { query: '', type: '', results: [], total: 0, page: 1, ratings: {}, frTitles: {} };
 
 function resultCard(r, refreshList) {
   const saved = store.findTitle(r.id);
   const ratings = last.ratings[r.id];
+  const frTitle = last.frTitles[r.id];
   const add = async (e) => {
     e.stopPropagation();
     try {
@@ -26,11 +29,11 @@ function resultCard(r, refreshList) {
     }
   };
   return h('li.result', {},
-    h('button.result-main', { type: 'button', onclick: () => openDetail(r) },
-      poster(r, { width: 160 }),
+    h('button.result-main', { type: 'button', onclick: () => openDetail({ ...r, frTitle }) },
+      poster({ ...r, frTitle }, { width: 160 }),
       h('div.result-text', {},
-        h('strong', {}, r.title),
-        h('span.muted', {}, [typeLabel(r.type), r.year].filter(Boolean).join(' · ')),
+        h('strong', {}, frTitle ?? r.title),
+        h('span.muted', {}, [frTitle && frTitle !== r.title ? r.title : null, typeLabel(r.type), r.year].filter(Boolean).join(' · ')),
         ratings === undefined ? h('span.chips.pending', {}, 'notes…') : scoreChips(ratings) ?? h('span.muted.small', {}, 'pas encore noté'))),
     saved
       ? h('span.added', { title: 'Déjà dans le carnet' }, saved.status === 'watched' ? '✓ Vu' : '✓ Carnet')
@@ -61,6 +64,32 @@ export function renderSearch(root) {
     },
   );
 
+  /** Titres trouvés par leur nom français (Wikipédia), placés en tête s'ils manquent aux résultats OMDb. */
+  async function addFrenchMatches(query, myToken) {
+    try {
+      const ids = await findByFrenchTitle(query, { limit: 4 });
+      const fresh = ids.filter((id) => !last.results.some((r) => r.id === id));
+      const fiches = (await Promise.all(fresh.map((id) => omdb.details(apiKey, id).catch(() => null))))
+        .filter((f) => f && (!typeSel.value || f.type === typeSel.value));
+      if (myToken !== token) return;
+      if (!fiches.length) { if (!last.results.length) status.textContent = NO_RESULT; return; }
+      const titles = await frenchTitles(fiches.map((f) => f.id));
+      if (myToken !== token) return;
+      last = {
+        ...last,
+        results: [...fiches.map(({ id, title, year, type, poster }) => ({ id, title, year, type, poster })), ...last.results],
+        total: last.total + fiches.length,
+        ratings: { ...last.ratings, ...Object.fromEntries(fiches.map((f) => [f.id, f.ratings])) },
+        frTitles: { ...last.frTitles, ...titles },
+      };
+      status.textContent = `${last.total.toLocaleString('fr-FR')} résultat${last.total > 1 ? 's' : ''}`;
+      drawList();
+    } catch (err) {
+      console.error('Recherche en français impossible', err);
+      if (myToken === token && !last.results.length) status.textContent = NO_RESULT;
+    }
+  }
+
   async function run(page = 1) {
     const query = input.value.trim();
     const myToken = ++token;
@@ -78,9 +107,15 @@ export function renderSearch(root) {
       last = { ...last, query, type: typeSel.value, results: merged, total, page };
       status.textContent = total
         ? `${total.toLocaleString('fr-FR')} résultat${total > 1 ? 's' : ''}`
-        : 'Aucun résultat. Essaie le titre original (souvent en anglais) ou colle le lien IMDb.';
+        : 'Recherche aussi en français…';
       drawList();
       loadRatings(results, myToken);
+      frenchTitles(results.map((r) => r.id)).then((found) => {
+        if (myToken !== token) return;
+        last = { ...last, frTitles: { ...last.frTitles, ...found } };
+        drawList();
+      });
+      if (page === 1) addFrenchMatches(query, myToken);
     } catch (err) {
       if (myToken === token) status.textContent = err.message;
     }

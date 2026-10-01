@@ -13,6 +13,9 @@ const GENRES_FR = {
 
 export const TYPE_LABELS = { movie: 'Film', series: 'Série', episode: 'Épisode', game: 'Jeu' };
 
+/** Titre affiché : le titre français (Wikipédia) s'il existe, sinon le titre original. */
+export const displayTitle = (t) => t.fr?.title ?? t.frTitle ?? t.title;
+
 const clean = (value) => (value == null || value === NA || value === '' ? null : String(value).trim());
 
 /** « 8.8/10 » → 8.8 ; « 87% » → 87 ; « 74/100 » → 74. */
@@ -145,7 +148,7 @@ export const SORTS = {
   mine: { label: 'Ma note', key: (t) => t.myRating, dir: -1 },
   year: { label: 'Année (récent)', key: (t) => firstYear(t.year), dir: -1 },
   runtime: { label: 'Durée (court)', key: (t) => t.runtime, dir: 1 },
-  title: { label: 'Titre (A→Z)', key: (t) => t.title?.toLocaleLowerCase('fr'), dir: 1 },
+  title: { label: 'Titre (A→Z)', key: (t) => displayTitle(t)?.toLocaleLowerCase('fr'), dir: 1 },
 };
 
 export function sortTitles(titles, sortKey = 'added') {
@@ -168,7 +171,7 @@ export function filterTitles(titles, filters = {}) {
     if (minImdb && !((t.ratings?.imdb ?? 0) >= minImdb)) return false;
     if (minRt && !((t.ratings?.rt ?? 0) >= minRt)) return false;
     if (needle) {
-      const hay = normalize([t.title, t.director, t.actors, t.note, ...(t.genres ?? []).map(translateGenre)].join(' '));
+      const hay = normalize([t.title, t.fr?.title, t.director, t.actors, t.note, ...(t.genres ?? []).map(translateGenre)].join(' '));
       if (!hay.includes(needle)) return false;
     }
     return true;

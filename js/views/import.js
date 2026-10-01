@@ -1,6 +1,7 @@
 // Importer une liste : un titre par ligne → chaque titre est retrouvé sur OMDb, vérifié, puis ajouté au carnet.
 import { h, openSheet, poster, scoreChips, toast, typeLabel } from '../ui.js';
-import { parseList, parseLine } from '../model.js';
+import { displayTitle, parseList, parseLine } from '../model.js';
+import { frenchTitles, resolveAnyTitle } from '../french.js';
 import * as store from '../store.js';
 import * as omdb from '../omdb.js';
 
@@ -19,17 +20,19 @@ function row(item, onRetry, onToggle) {
         retry, h('button.btn.ghost', { type: 'submit' }, 'Réessayer')));
   }
   const known = store.findTitle(title.id);
+  const name = displayTitle(title);
+  const norm = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const sameAsQuery = !item.query || [name, title.title].some((n) => norm(n) === norm(item.query));
   return h(`li.imp.found${item.checked ? '' : '.off'}`, {},
     h('label.imp-pick', {},
       h('input', { type: 'checkbox', checked: item.checked, disabled: !!known, onchange: (e) => onToggle(e.target.checked) }),
       poster(title, { width: 120 }),
       h('div.imp-text', {},
-        h('strong', {}, title.title),
-        h('span.muted', {}, [typeLabel(title.type), title.year].filter(Boolean).join(' · ')),
+        h('strong', {}, name),
+        h('span.muted', {}, [name !== title.title ? title.title : null, typeLabel(title.type), title.year].filter(Boolean).join(' · ')),
         scoreChips(title.ratings, { compact: true }),
         known ? h('span.muted.small', {}, 'déjà dans le carnet') : null,
-        item.query && title.title.toLowerCase() !== item.query.toLowerCase()
-          ? h('span.muted.small', {}, `pour « ${item.raw} »`) : null)));
+        sameAsQuery ? null : h('span.muted.small', {}, `pour « ${item.raw} » — vérifie que c’est le bon`))));
 }
 
 function body(close) {
@@ -68,8 +71,9 @@ function body(close) {
   async function lookup(index, parsed) {
     setItem(index, { ...parsed, state: 'pending' });
     try {
-      const title = await omdb.resolve(apiKey, parsed);
+      const title = await resolveAnyTitle(apiKey, parsed);
       setItem(index, title ? { state: 'found', title, checked: true } : { state: 'missing', error: 'introuvable' });
+      if (title) addFrenchTitles();
     } catch (err) {
       setItem(index, { state: 'missing', error: err.message });
     }
@@ -80,12 +84,23 @@ function body(close) {
     if (!parsed.length) { toast('Colle au moins un titre.'); return; }
     items = parsed.map((p) => ({ ...p, state: 'pending' }));
     draw();
-    await omdb.pool(parsed, AT_ONCE, (p) => omdb.resolve(apiKey, p), (i, res) => {
+    await omdb.pool(parsed, AT_ONCE, (p) => resolveAnyTitle(apiKey, p), (i, res) => {
       if (res.ok && res.value) setItem(i, { state: 'found', title: res.value, checked: true });
       else setItem(i, { state: 'missing', error: res.ok ? 'introuvable' : res.error.message });
     });
     // Les lignes non traitées (clé refusée, limite du jour) restent signalées.
     items = items.map((it) => (it.state === 'pending' ? { ...it, state: 'missing', error: 'non traité' } : it));
+    draw();
+    addFrenchTitles();
+  }
+
+  /** Affiche les titres français des titres trouvés (un seul appel Wikidata pour tout le lot). */
+  async function addFrenchTitles() {
+    const ids = items.filter((it) => it.state === 'found' && !it.title.frTitle).map((it) => it.title.id);
+    if (!ids.length) return;
+    const found = await frenchTitles(ids);
+    items = items.map((it) => (it.state === 'found' && found[it.title.id]
+      ? { ...it, title: { ...it.title, frTitle: found[it.title.id] } } : it));
     draw();
   }
 
@@ -104,7 +119,7 @@ function body(close) {
   return h('div.import', {},
     h('p.muted', {},
       'Un titre par ligne. Tu peux ajouter l’année — « Dune (2021) » — ou coller un lien IMDb pour être sûr du bon titre. ',
-      'Les titres en anglais (titre original) sont mieux reconnus.'),
+      'Titres français ou originaux : les deux marchent.'),
     textarea,
     h('button.btn.primary.wide', { type: 'button', onclick: analyse }, 'Rechercher ces titres'),
     status, list, confirmBtn);

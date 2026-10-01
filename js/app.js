@@ -4,6 +4,7 @@ import * as store from './store.js';
 import { renderSearch } from './views/search.js';
 import { renderCarnet } from './views/carnet.js';
 import { openSettings, renderWelcome } from './views/settings.js';
+import { enrichCarnet, needsFrench } from './french.js';
 
 const TABS = [
   { id: 'carnet', label: 'Carnet', icon: '▦' },
@@ -33,6 +34,8 @@ function drawNav() {
 }
 
 function draw() {
+  // Garde le curseur dans la recherche du carnet si l'écran est redessiné pendant la saisie.
+  const typing = document.activeElement?.closest?.('.carnet-search') ? document.activeElement.selectionStart : null;
   if (!store.getState().apiKey) {
     nav.hidden = true;
     renderWelcome(main, () => go('search'));
@@ -41,14 +44,33 @@ function draw() {
   drawNav();
   if (current === 'search') renderSearch(main);
   else renderCarnet(main, { goSearch: () => go('search') });
+  if (typing != null) {
+    const input = main.querySelector('.carnet-search input');
+    input?.focus({ preventScroll: true });
+    input?.setSelectionRange(typing, typing);
+  }
+}
+
+// Titres français + synopsis Wikipédia : complétés en arrière-plan pour tout titre du carnet qui n'en a pas.
+let enriching = false;
+async function enrichInBackground() {
+  if (enriching || !store.getState().titles.some(needsFrench)) return;
+  enriching = true;
+  try {
+    await enrichCarnet();
+  } finally {
+    enriching = false;
+  }
 }
 
 // Redessine l'onglet quand les données changent (sauf pendant une saisie de texte).
 store.subscribe((_, meta) => {
   if (!meta.quiet) draw();
+  if (!meta.background) setTimeout(enrichInBackground, 300);
 });
 
 draw();
+enrichInBackground();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch((err) => console.error('Service worker', err));

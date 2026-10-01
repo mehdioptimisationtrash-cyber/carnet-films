@@ -1,6 +1,6 @@
 // Onglet Carnet : la banque de titres, filtrée et triée, en mur de jaquettes.
 import { h, poster, scoreChips, typeLabel } from '../ui.js';
-import { allGenres, filterTitles, formatRuntime, SORTS, sortTitles, stats, translateGenre } from '../model.js';
+import { allGenres, displayTitle, filterTitles, formatRuntime, SORTS, sortTitles, stats, translateGenre } from '../model.js';
 import * as store from '../store.js';
 import { openDetail } from './detail.js';
 import { openImport } from './import.js';
@@ -27,7 +27,7 @@ function card(t) {
       t.priority ? h('span.flag', { title: 'Prioritaire' }, '🔥') : null,
       t.status === 'watched' ? h('span.seen', {}, t.myRating ? `✓ ${'★'.repeat(t.myRating)}` : '✓ Vu') : null,
       h('div.card-body', {},
-        h('strong.card-title', {}, t.title),
+        h('strong.card-title', {}, displayTitle(t)),
         h('span.card-meta', {}, [typeLabel(t.type), t.year, t.type === 'movie' ? formatRuntime(t.runtime) : null].filter(Boolean).join(' · ')),
         scoreChips(t.ratings, { compact: true }))));
 }

@@ -1,8 +1,9 @@
 // Fiche d'un titre : jaquette, notes détaillées, infos, et actions du carnet.
 import { h, openSheet, poster, toast, typeLabel } from '../ui.js';
-import { formatRuntime, rtState, translateGenre } from '../model.js';
+import { displayTitle, formatRuntime, rtState, translateGenre } from '../model.js';
 import * as store from '../store.js';
 import * as omdb from '../omdb.js';
+import { fetchFrench, needsFrench } from '../french.js';
 
 const fmt1 = (n) => n.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const votes = (n) => (n ? `${n.toLocaleString('fr-FR')} votes` : null);
@@ -25,8 +26,31 @@ function scores(t) {
     scoreCard('Metacritic', r.mc != null ? String(r.mc) : null, '/ 100', 'mc', `https://www.metacritic.com/search/${q}/`));
 }
 
+/** Synopsis français (Wikipédia). Premier paragraphe visible, la suite sur demande (elle peut révéler la fin). */
+function synopsis(t, frState) {
+  const fr = t.fr;
+  const head = (label) => h('h4.syn-head', {}, label,
+    fr?.url ? h('a.syn-source', { href: fr.url, target: '_blank', rel: 'noopener noreferrer' }, 'Wikipédia ↗') : null);
+  if (!fr) {
+    return h('section.synopsis', {}, head('Synopsis'),
+      h('p.muted', {}, frState === 'error' ? 'Wikipédia ne répond pas pour l’instant. Réessaie plus tard.' : 'Recherche du synopsis en français…'));
+  }
+  if (fr.synopsis?.length) {
+    const [first, ...rest] = fr.synopsis;
+    const more = h('div.syn-more', { hidden: true }, rest.map((p) => h('p', {}, p)));
+    return h('section.synopsis', {}, head('Synopsis'), h('p', {}, first), more,
+      rest.length ? h('button.link', {
+        type: 'button',
+        onclick: (e) => { more.hidden = false; e.target.remove(); },
+      }, 'Lire la suite (peut dévoiler l’intrigue)') : null);
+  }
+  if (fr.intro) return h('section.synopsis', {}, head('Présentation'), h('p', {}, fr.intro));
+  return h('section.synopsis', {}, head('Synopsis'), h('p.muted', {}, 'Pas de synopsis en français trouvé pour ce titre.'));
+}
+
 function facts(t) {
   const rows = [
+    ['Titre original', t.fr?.title && t.fr.title !== t.title ? t.title : null],
     ['Genre', t.genres?.map(translateGenre).join(', ')],
     ['Durée', t.type === 'series' ? (t.runtime ? `${t.runtime} min / épisode` : null) : formatRuntime(t.runtime)],
     ['Saisons', t.seasons],
@@ -71,7 +95,7 @@ function personal(t) {
     watched && t.watchedAt ? h('p.muted', {}, `Vu le ${new Date(t.watchedAt).toLocaleDateString('fr-FR', { dateStyle: 'long' })}`) : null);
 }
 
-function render(t, close) {
+function render(t, close, frState) {
   const inCarnet = !!store.findTitle(t.id);
   const shown = store.findTitle(t.id) ?? t;
   const meta = [typeLabel(shown.type), shown.year, shown.type !== 'series' ? formatRuntime(shown.runtime) : null].filter(Boolean).join(' · ');
@@ -79,16 +103,16 @@ function render(t, close) {
     h('div.detail-hero', {},
       poster(shown, { width: 600, eager: true }),
       h('div.detail-head', {},
-        h('h3.detail-title', {}, shown.title),
+        h('h3.detail-title', {}, displayTitle(shown)),
         h('p.detail-meta', {}, meta),
         inCarnet
           ? h('p.in-carnet', {}, shown.status === 'watched' ? '✓ Vu — dans ton carnet' : '● Dans ton carnet — à voir')
           : h('button.btn.primary', {
             type: 'button',
-            onclick: () => { store.addTitles([t]); toast(`« ${t.title} » ajouté au carnet`); },
+            onclick: () => { store.addTitles([t]); toast(`« ${displayTitle(t)} » ajouté au carnet`); },
           }, '+ Ajouter au carnet'))),
     scores(shown),
-    shown.plot ? h('p.plot', { lang: 'en' }, shown.plot) : null,
+    synopsis(shown, frState),
     inCarnet ? personal(shown) : null,
     facts(shown),
     h('footer.detail-foot', {},
@@ -96,7 +120,7 @@ function render(t, close) {
       inCarnet ? h('button.link.danger', {
         type: 'button',
         onclick: () => {
-          if (!confirm(`Retirer « ${shown.title} » du carnet ?`)) return;
+          if (!confirm(`Retirer « ${displayTitle(shown)} » du carnet ?`)) return;
           store.removeTitle(shown.id);
           close();
           toast('Retiré du carnet');
@@ -117,19 +141,30 @@ async function refresh(id) {
 /** Ouvre la fiche. `preview` = aperçu de recherche ou titre du carnet ; la fiche complète est chargée si besoin. */
 export function openDetail(preview) {
   let current = store.findTitle(preview.id) ?? preview;
-  openSheet(current.title, (close) => {
+  let frState = 'loading';
+  openSheet(displayTitle(current), (close) => {
     const host = h('div.detail-host');
-    const draw = () => host.replaceChildren(render(store.findTitle(current.id) ?? current, close));
-    const unsubscribe = store.subscribe((_, meta) => !meta.quiet && host.isConnected && draw());
+    const draw = () => host.replaceChildren(render(store.findTitle(current.id) ?? current, close, frState));
+    // Les compléments en arrière-plan (meta.background) ne redessinent pas la fiche : saisie en cours préservée.
+    const unsubscribe = store.subscribe((_, meta) => !meta.quiet && !meta.background && host.isConnected && draw());
     const observer = new MutationObserver(() => { if (!host.isConnected) { unsubscribe(); observer.disconnect(); } });
     observer.observe(document.body, { childList: true });
     draw();
     if (!current.fetchedAt) {
       host.classList.add('loading');
       omdb.details(store.getState().apiKey, current.id)
-        .then((full) => { current = full; draw(); })
+        .then((full) => { current = { ...full, fr: current.fr }; draw(); })
         .catch((err) => toast(err.message, 'error'))
         .finally(() => host.classList.remove('loading'));
+    }
+    if (needsFrench(current)) {
+      fetchFrench(current.id)
+        .then((fr) => {
+          current = { ...current, fr };
+          if (store.findTitle(current.id)) store.patchTitle(current.id, { fr });
+          else if (host.isConnected) draw();
+        })
+        .catch(() => { frState = 'error'; if (host.isConnected) draw(); });
     }
     return host;
   }, { wide: true });

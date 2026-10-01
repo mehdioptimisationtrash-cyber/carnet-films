@@ -367,3 +367,11 @@ select { appearance: none; padding-right: 30px;
   .tabs { grid-template-columns: repeat(3, 130px); justify-content: center; }
 }
 .import > .btn.primary.wide:last-child { position: sticky; bottom: 8px; z-index: 2; }
+
+/* ——— Synopsis français ——— */
+.synopsis { margin: 0 0 18px; }
+.syn-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 8px;
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--marquee); }
+.syn-source { font-size: 0.76rem; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--muted); }
+.synopsis p { margin: 0 0 10px; font-size: 1.02rem; line-height: 1.6; }
+.synopsis p.muted { font-size: 0.92rem; }
