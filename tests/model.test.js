@@ -91,5 +91,9 @@ test('petits utilitaires', () => {
     posterUrl('https://m.media-amazon.com/images/M/abc@._V1_SX300.jpg', 600),
     'https://m.media-amazon.com/images/M/abc@._V1_SX600.jpg',
   );
+  assert.equal(
+    posterUrl('https://m.media-amazon.com/images/M/xyz@._V1_QL75_UX380_CR0,1,380,562_.jpg', 160),
+    'https://m.media-amazon.com/images/M/xyz@._V1_SX160.jpg',
+  );
   assert.equal(posterUrl(null), null);
 });
