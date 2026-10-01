@@ -52,9 +52,11 @@ draw();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch((err) => console.error('Service worker', err));
+  // Recharge seulement lors d'une mise à jour (pas à la toute première visite, ni pendant l'accueil).
+  const hadController = !!navigator.serviceWorker.controller;
   let reloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloaded || document.querySelector('.sheet')) return;
+    if (!hadController || reloaded || document.querySelector('.sheet, .welcome')) return;
     reloaded = true;
     location.reload();
   });
