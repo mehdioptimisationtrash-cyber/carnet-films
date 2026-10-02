@@ -446,3 +446,4 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.85em
 @media (min-width: 720px) { .sugg { grid-template-columns: 130px 1fr; } }
 .cloud-ok { margin: 0 0 16px; padding: 12px 14px; border-radius: var(--radius); font-weight: 600;
   background: color-mix(in srgb, var(--rt-rotten) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--rt-rotten) 40%, transparent); }
+.warn-box { background: color-mix(in srgb, var(--marquee) 16%, var(--surface)); border-color: color-mix(in srgb, var(--marquee) 50%, transparent); }

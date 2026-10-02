@@ -43,12 +43,17 @@ export function keyForm({ onSaved } = {}) {
 export function renderWelcome(root, onDone, onRestored = onDone) {
   // Feuille déjà branchée mais sans clé OMDb (feuille neuve) : on le dit clairement, il ne reste que la clé.
   const connected = cloudConnected();
+  // Sur iPhone, l'icône de l'écran d'accueil ne voit pas les données saisies dans Safari (mémoires séparées).
+  const isHomeScreenApp = window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches;
   root.replaceChildren(h('section.welcome', {},
     h('p.kicker', {}, 'Bienvenue'),
     h('h1', {}, 'Carnet Films'),
     h('p.lead', {}, 'Ta watchlist avec les jaquettes et les notes IMDb, Rotten Tomatoes et Metacritic.'),
     connected ? h('p.cloud-ok', { role: 'status' },
       '✓ Ta feuille Google est branchée. Elle ne contient pas encore de clé OMDb : colle ta clé ci-dessous, elle y sera enregistrée et tu ne la redonneras plus.') : null,
+    isHomeScreenApp && !connected ? h('p.cloud-ok.warn-box', {},
+      'Tu avais déjà rempli ton carnet dans Safari ? Il y est toujours : sur iPhone, Safari et cette icône ont chacun leur mémoire. ',
+      'Ouvre le site dans Safari, puis Réglages → Sauvegarde en ligne → branche ta feuille Google : ton carnet reviendra ici aussi.') : null,
     h('div.steps', {},
       h('h2', {}, connected ? 'Dernière étape : ta clé OMDb' : 'Une seule étape avant de commencer'),
       h('p', {}, 'Les notes viennent d’OMDb, un service gratuit. Il te donne une « clé » (un petit code) à coller ici :'),
