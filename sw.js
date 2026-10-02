@@ -1,7 +1,7 @@
 // Service worker : l'app s'ouvre hors ligne. Fichiers de l'app en réseau d'abord (mises à jour immédiates),
 // jaquettes en cache d'abord (elles ne changent pas). OMDb : toujours en direct.
 // À chaque modification du site, augmenter CACHE_VERSION (et APP_VERSION dans js/version.js).
-const CACHE_VERSION = 'carnet-films-v4';
+const CACHE_VERSION = 'carnet-films-v5';
 const POSTER_CACHE = 'carnet-films-posters';
 const MAX_POSTERS = 600;
 const SHELL = [

@@ -41,7 +41,7 @@ function draw() {
   const typing = document.activeElement?.closest?.('.carnet-search') ? document.activeElement.selectionStart : null;
   if (!store.getState().apiKey) {
     nav.hidden = true;
-    renderWelcome(main, () => go('search'), () => go('carnet'));
+    renderWelcome(main, () => go('search'), () => (store.getState().apiKey ? go('carnet') : draw()));
     return;
   }
   drawNav();

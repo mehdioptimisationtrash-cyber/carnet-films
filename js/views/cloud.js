@@ -38,7 +38,7 @@ function connectForm({ token = '', onDone, submitLabel = 'Brancher la feuille' }
       try {
         const n = await sync.connect(url.value, code.value);
         status.textContent = '';
-        toast(n ? `Feuille branchée — ${n} titre${n > 1 ? 's' : ''} récupéré${n > 1 ? 's' : ''}` : 'Feuille branchée', 'ok');
+        toast(n ? `Feuille branchée — ${n} titre${n > 1 ? 's' : ''} récupéré${n > 1 ? 's' : ''}` : 'Feuille branchée (encore vide)', 'ok');
         onDone?.();
       } catch (err) {
         status.textContent = err.message;
