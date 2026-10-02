@@ -1,61 +1,12 @@
 """Parcours complet dans WebKit (iPhone) avec un faux OMDb. Lancer : python3 tests/e2e/run.py (serveur sur 8766)."""
-import json, re, sys
+import sys
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
 from playwright.sync_api import sync_playwright
 
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp")
+sys.path.insert(0, str(Path(__file__).parent))
 BASE = "http://localhost:8766/"
-DB = {
-  "tt1375666": dict(Title="Inception", Year="2010", Type="movie", Runtime="148 min", Genre="Action, Adventure, Sci-Fi",
-                    Director="Christopher Nolan", Actors="Leonardo DiCaprio, Joseph Gordon-Levitt", imdbRating="8.8", imdbVotes="2,612,000",
-                    Metascore="74", Ratings=[{"Source":"Internet Movie Database","Value":"8.8/10"},{"Source":"Rotten Tomatoes","Value":"87%"},{"Source":"Metacritic","Value":"74/100"}],
-                    Plot="A thief who steals corporate secrets through dream-sharing technology."),
-  "tt0068646": dict(Title="The Godfather", Year="1972", Type="movie", Runtime="175 min", Genre="Crime, Drama", Director="Francis Ford Coppola",
-                    imdbRating="9.2", imdbVotes="2,100,000", Metascore="100", Ratings=[{"Source":"Rotten Tomatoes","Value":"97%"}], Plot="The aging patriarch..."),
-  "tt14452776": dict(Title="The Bear", Year="2022–", Type="series", Runtime="30 min", Genre="Comedy, Drama", totalSeasons="4",
-                     imdbRating="8.5", imdbVotes="300,000", Ratings=[{"Source":"Internet Movie Database","Value":"8.5/10"}], Plot="A young chef..."),
-  "tt0111161": dict(Title="The Shawshank Redemption", Year="1994", Type="movie", Runtime="142 min", Genre="Drama", imdbRating="9.3",
-                    Ratings=[{"Source":"Rotten Tomatoes","Value":"89%"}], Poster="N/A"),
-  "tt0137523": dict(Title="Fight Club", Year="1999", Type="movie", Runtime="139 min", Genre="Drama", imdbRating="8.8",
-                    Ratings=[{"Source":"Rotten Tomatoes","Value":"79%"}]),
-  "tt1160419": dict(Title="Dune", Year="2021", Type="movie", Runtime="155 min", Genre="Action, Adventure, Drama, Sci-Fi", imdbRating="8.0",
-                    Ratings=[{"Source":"Rotten Tomatoes","Value":"83%"}], Metascore="74"),
-  "tt0087182": dict(Title="Dune", Year="1984", Type="movie", Runtime="137 min", Genre="Action, Adventure, Sci-Fi", imdbRating="6.3",
-                    Ratings=[{"Source":"Rotten Tomatoes","Value":"36%"}]),
-}
-COLORS = ["#7a2e1d", "#1d3f7a", "#2e6b3a", "#6b2e6b", "#7a6a1d", "#1d6b6b", "#444"]
-for i, (k, v) in enumerate(DB.items()):
-    v.update(imdbID=k, Response="True")
-    v.setdefault("Poster", f"https://m.media-amazon.com/images/M/{k}@._V1_SX300.jpg")
-calls = []
-
-def omdb(route):
-    q = {k: v[0] for k, v in parse_qs(urlparse(route.request.url).query).items()}
-    calls.append(q)
-    body = {"Response": "False", "Error": "Movie not found!"}
-    if q.get("apikey") != "abcd1234":
-        body = {"Response": "False", "Error": "Invalid API key!"}
-    elif "i" in q and q["i"] in DB:
-        body = DB[q["i"]]
-    elif "t" in q:
-        t = q["t"].lower()
-        hits = [v for v in DB.values() if v["Title"].lower() == t and (not q.get("y") or v["Year"].startswith(q["y"]))]
-        if hits: body = hits[0]
-    elif "s" in q:
-        s = q["s"].lower()
-        hits = [v for v in DB.values() if s in v["Title"].lower() and (not q.get("type") or v["Type"] == q["type"])]
-        if hits:
-            body = {"Response": "True", "totalResults": str(len(hits)),
-                    "Search": [{k: v[k] for k in ("Title", "Year", "imdbID", "Type", "Poster")} for v in hits]}
-    route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps(body))
-
-def poster(route):
-    m = re.search(r"/M/(tt\d+)", route.request.url)
-    idx = list(DB).index(m.group(1)) if m and m.group(1) in DB else 0
-    title = DB.get(m.group(1), {}).get("Title", "?") if m else "?"
-    svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="300" height="444"><rect width="300" height="444" fill="{COLORS[idx % len(COLORS)]}"/><text x="20" y="400" font-size="34" fill="#fff" font-family="Georgia">{title}</text></svg>'
-    route.fulfill(status=200, content_type="image/svg+xml", body=svg)
+from mocks import *
 
 errors = []
 with sync_playwright() as p:
@@ -86,11 +37,12 @@ with sync_playwright() as p:
     page.wait_for_selector(".result >> text=Dune")
     page.wait_for_selector(".result .chip.rt")
     page.screenshot(path=str(OUT / "02-recherche.png"), full_page=True)
-    page.click(".result:first-child .add")
-    page.wait_for_selector(".result:first-child .added")
+    page.wait_for_selector(".result:has-text('2021') .add")
+    page.click(".result:has-text('2021') .add")
+    page.wait_for_selector(".result:has-text('2021') .added")
 
     # Fiche depuis la recherche
-    page.click(".result:nth-child(2) .result-main")
+    page.click(".result:has-text('1984') .result-main")
     page.wait_for_selector(".detail .score.rt.rotten")
     page.screenshot(path=str(OUT / "03-fiche-recherche.png"))
     page.click(".sheet-head button")

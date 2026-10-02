@@ -1,9 +1,10 @@
 // Onglet Rechercher : recherche OMDb, notes chargées pour chaque résultat, ajout en un geste.
-import { h, poster, scoreChips, toast, typeLabel } from '../ui.js';
+import { h } from '../ui.js';
 import * as store from '../store.js';
 import * as omdb from '../omdb.js';
 import { findByFrenchTitle, frenchTitles } from '../french.js';
-import { openDetail } from './detail.js';
+import { resultCard } from './result-card.js';
+import { advancedPanel } from './advanced.js';
 import { openImport } from './import.js';
 
 const DEBOUNCE_MS = 450;
@@ -12,33 +13,6 @@ const NO_RESULT = 'Aucun résultat. Vérifie l’orthographe, ou colle le lien I
 
 // Gardé entre deux affichages de l'onglet.
 let last = { query: '', type: '', results: [], total: 0, page: 1, ratings: {}, frTitles: {} };
-
-function resultCard(r, refreshList) {
-  const saved = store.findTitle(r.id);
-  const ratings = last.ratings[r.id];
-  const frTitle = last.frTitles[r.id];
-  const add = async (e) => {
-    e.stopPropagation();
-    try {
-      const full = await omdb.details(store.getState().apiKey, r.id);
-      store.addTitles([full]);
-      toast(`« ${full.title} » ajouté au carnet`, 'ok');
-      refreshList();
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-  };
-  return h('li.result', {},
-    h('button.result-main', { type: 'button', onclick: () => openDetail({ ...r, frTitle }) },
-      poster({ ...r, frTitle }, { width: 160 }),
-      h('div.result-text', {},
-        h('strong', {}, frTitle ?? r.title),
-        h('span.muted', {}, [frTitle && frTitle !== r.title ? r.title : null, typeLabel(r.type), r.year].filter(Boolean).join(' · ')),
-        ratings === undefined ? h('span.chips.pending', {}, 'notes…') : scoreChips(ratings) ?? h('span.muted.small', {}, 'pas encore noté'))),
-    saved
-      ? h('span.added', { title: 'Déjà dans le carnet' }, saved.status === 'watched' ? '✓ Vu' : '✓ Carnet')
-      : h('button.add', { type: 'button', 'aria-label': `Ajouter ${r.title} au carnet`, onclick: add }, '+'));
-}
 
 export function renderSearch(root) {
   const { apiKey } = store.getState();
@@ -49,7 +23,7 @@ export function renderSearch(root) {
   let token = 0;
 
   const drawList = () => {
-    list.replaceChildren(...last.results.map((r) => resultCard(r, drawList)));
+    list.replaceChildren(...last.results.map((r) => resultCard(r, { ratings: last.ratings[r.id], frTitle: last.frTitles[r.id], onAdded: drawList })));
     more.hidden = last.results.length >= last.total || !last.results.length;
   };
 
@@ -136,6 +110,7 @@ export function renderSearch(root) {
       h('h1', {}, 'Trouver quoi regarder'),
       h('p.muted', {}, 'Titres de la base IMDb, avec les notes IMDb, Rotten Tomatoes et Metacritic.')),
     h('div.search-bar', {}, input, typeSel),
+    advancedPanel(),
     h('button.import-cta', { type: 'button', onclick: openImport },
       h('span.import-icon', { 'aria-hidden': 'true' }, '☰'),
       h('span', {}, h('strong', {}, 'Importer une liste'), h('small', {}, 'Colle plusieurs titres d’un coup, un par ligne'))),

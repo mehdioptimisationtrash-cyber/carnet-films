@@ -6,6 +6,7 @@ const EMPTY_STATE = Object.freeze({
   apiKey: '',
   titles: [], // [{ ...fiche OMDb, status: 'todo'|'watched', addedAt, watchedAt, myRating, note, priority }]
   view: { status: 'todo', type: 'all', genre: '', sort: 'added', minImdb: 0, minRt: 0 },
+  dismissed: [], // titres écartés des suggestions (« pas pour moi »)
 });
 
 let state = load();
@@ -60,19 +61,27 @@ export function addTitles(fiches, extra = {}) {
   const now = Date.now();
   const fresh = fiches
     .filter((f) => f && !known.has(f.id) && known.add(f.id))
-    .map((f, i) => ({ status: 'todo', myRating: null, note: '', priority: false, watchedAt: null, ...f, ...extra, addedAt: now - i }));
+    .map((f, i) => ({
+      status: 'todo', myRating: null, note: '', priority: false, watchedAt: null, ...f, ...extra, addedAt: now - i, updatedAt: now,
+    }));
   if (fresh.length) update((s) => ({ ...s, titles: [...fresh, ...s.titles] }));
   return fresh.length;
 }
 
 export function patchTitle(id, changes, meta) {
-  return update((s) => ({ ...s, titles: s.titles.map((t) => (t.id === id ? { ...t, ...changes } : t)) }), meta);
+  const updatedAt = Date.now();
+  return update((s) => ({ ...s, titles: s.titles.map((t) => (t.id === id ? { ...t, ...changes, updatedAt } : t)) }), meta);
 }
 
 /** Remplace les infos OMDb (notes à jour) sans toucher aux champs personnels. */
 export function refreshTitle(fiche) {
   return patchTitle(fiche.id, fiche);
 }
+
+/** Remplace tout le carnet (fusion avec la feuille en ligne). */
+export const replaceTitles = (titles, changes = {}, meta = {}) => update((s) => ({ ...s, ...changes, titles }), meta);
+
+export const dismiss = (id) => update((s) => ({ ...s, dismissed: [...new Set([...(s.dismissed ?? []), id])] }));
 
 export const removeTitle = (id) => update((s) => ({ ...s, titles: s.titles.filter((t) => t.id !== id) }));
 

@@ -3,17 +3,20 @@ import { h } from './ui.js';
 import * as store from './store.js';
 import { renderSearch } from './views/search.js';
 import { renderCarnet } from './views/carnet.js';
+import { renderDiscover } from './views/discover.js';
 import { openSettings, renderWelcome } from './views/settings.js';
 import { enrichCarnet, needsFrench } from './french.js';
+import { startSync } from './sync.js';
 
 const TABS = [
   { id: 'carnet', label: 'Carnet', icon: '▦' },
   { id: 'search', label: 'Rechercher', icon: '⌕' },
+  { id: 'discover', label: 'Pour moi', icon: '✦' },
 ];
 
 const main = document.getElementById('app');
 const nav = document.querySelector('nav.tabs');
-let current = location.hash === '#search' ? 'search' : 'carnet';
+let current = TABS.some((t) => `#${t.id}` === location.hash) ? location.hash.slice(1) : 'carnet';
 
 function go(tab) {
   current = tab;
@@ -38,11 +41,12 @@ function draw() {
   const typing = document.activeElement?.closest?.('.carnet-search') ? document.activeElement.selectionStart : null;
   if (!store.getState().apiKey) {
     nav.hidden = true;
-    renderWelcome(main, () => go('search'));
+    renderWelcome(main, () => go('search'), () => go('carnet'));
     return;
   }
   drawNav();
   if (current === 'search') renderSearch(main);
+  else if (current === 'discover') renderDiscover(main);
   else renderCarnet(main, { goSearch: () => go('search') });
   if (typing != null) {
     const input = main.querySelector('.carnet-search input');
@@ -65,11 +69,13 @@ async function enrichInBackground() {
 
 // Redessine l'onglet quand les données changent (sauf pendant une saisie de texte).
 store.subscribe((_, meta) => {
-  if (!meta.quiet) draw();
+  // Les compléments en arrière-plan (titres français) ne redessinent que le carnet : une recherche en cours reste intacte.
+  if (!meta.quiet && !(meta.background && current !== 'carnet')) draw();
   if (!meta.background) setTimeout(enrichInBackground, 300);
 });
 
 draw();
+startSync();
 enrichInBackground();
 
 if ('serviceWorker' in navigator) {

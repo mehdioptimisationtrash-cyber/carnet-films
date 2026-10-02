@@ -3,6 +3,7 @@ import { download, h, openSheet, readFile, toast } from '../ui.js';
 import * as store from '../store.js';
 import * as omdb from '../omdb.js';
 import { APP_VERSION } from '../version.js';
+import { cloudCard, restoreOnWelcome } from './cloud.js';
 
 const SIGNUP_URL = 'https://www.omdbapi.com/apikey.aspx';
 const REFRESH_AT_ONCE = 3;
@@ -38,7 +39,7 @@ export function keyForm({ onSaved } = {}) {
   }, h('div.key-row', {}, input, submit), status);
 }
 
-export function renderWelcome(root, onDone) {
+export function renderWelcome(root, onDone, onRestored = onDone) {
   root.replaceChildren(h('section.welcome', {},
     h('p.kicker', {}, 'Bienvenue'),
     h('h1', {}, 'Carnet Films'),
@@ -52,7 +53,8 @@ export function renderWelcome(root, onDone) {
         h('li', {}, 'Ouvre l’e-mail reçu et clique sur le lien d’activation.'),
         h('li', {}, 'Copie la clé (8 caractères) de l’e-mail et colle-la ci-dessous.')),
       keyForm({ onSaved: onDone }),
-      h('p.muted.small', {}, 'Gratuit, 1 000 demandes par jour : largement assez. La clé reste sur ton téléphone.'))));
+      h('p.muted.small', {}, 'Gratuit, 1 000 demandes par jour : largement assez.')),
+    restoreOnWelcome(onRestored)));
 }
 
 async function refreshAll(button) {
@@ -90,6 +92,7 @@ function body() {
   });
   const { titles } = store.getState();
   return h('div.settings', {},
+    cloudCard(),
     h('section.card-block', {},
       h('h3', {}, 'Clé OMDb'),
       h('p.muted.small', {}, 'Elle sert à chercher les titres et à récupérer les notes. ',
@@ -100,8 +103,8 @@ function body() {
       h('p.muted.small', {}, 'Les notes évoluent avec le temps. Ceci recharge celles des ', String(titles.length), ' titres du carnet.'),
       refreshBtn),
     h('section.card-block', {},
-      h('h3', {}, 'Sauvegarde'),
-      h('p.muted.small', {}, 'Le carnet est enregistré sur ce téléphone. Fais une copie de temps en temps (dans Fichiers ou iCloud).'),
+      h('h3', {}, 'Copie dans un fichier'),
+      h('p.muted.small', {}, 'En plus de la feuille en ligne, tu peux garder une copie du carnet dans Fichiers ou iCloud.'),
       h('div.actions', {},
         h('button.btn.ghost', {
           type: 'button',

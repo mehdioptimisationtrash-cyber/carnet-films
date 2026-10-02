@@ -1,6 +1,6 @@
 // Version française d'un titre : identifiant IMDb → article Wikipédia FR (via Wikidata) → titre français + synopsis.
 // Aucun texte n'est traduit : le synopsis est celui rédigé sur Wikipédia.
-import { cleanFrTitle, extractSynopsis } from './synopsis.js';
+import { cleanFrTitle, extractSynopsis, titleMatches } from './synopsis.js';
 import { details, pool, resolve } from './omdb.js';
 import { firstYear } from './model.js';
 import * as store from './store.js';
@@ -21,9 +21,9 @@ const frCache = new Map(); // imdbId → { title, synopsis, intro, url, fetchedA
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** GET JSON ; si Wikipédia demande de ralentir (429), attend puis réessaie (2 fois au plus). */
-async function getJson(url, attempt = 0) {
+export async function getJson(url, attempt = 0, timeoutMs = TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res;
   try {
     res = await fetch(url, { signal: controller.signal });
@@ -32,7 +32,7 @@ async function getJson(url, attempt = 0) {
   }
   if (res.status === 429 && attempt < 2) {
     await wait(THROTTLE_WAIT_MS * (attempt + 1));
-    return getJson(url, attempt + 1);
+    return getJson(url, attempt + 1, timeoutMs);
   }
   if (!res.ok) throw new Error(`Wikipédia a répondu ${res.status}`);
   return res.json();
@@ -95,13 +95,14 @@ export async function fetchFrench(id) {
  * Titre français (« Le Parrain », « Les Évadés ») → identifiants IMDb, du plus pertinent au moins pertinent.
  * Recherche dans Wikipédia FR, puis Wikidata donne l'identifiant IMDb de chaque article trouvé.
  */
-export async function findByFrenchTitle(query, { year = null, limit = 4 } = {}) {
+export async function findByFrenchTitle(query, { year = null, limit = 4, strict = false } = {}) {
   const params = new URLSearchParams({
     action: 'query', generator: 'search', gsrsearch: [query, year].filter(Boolean).join(' '), gsrlimit: '8',
     gsrnamespace: '0', prop: 'pageprops', ppprop: 'wikibase_item', format: 'json', formatversion: '2', origin: '*',
   });
   const data = await getJson(`${WIKI_API}?${params}`);
-  const pages = [...(data?.query?.pages ?? [])].sort((a, b) => a.index - b.index);
+  const pages = [...(data?.query?.pages ?? [])].sort((a, b) => a.index - b.index)
+    .filter((p) => !strict || titleMatches(query, p.title));
   const items = pages.map((p) => p.pageprops?.wikibase_item).filter((q) => /^Q\d+$/.test(q ?? ''));
   if (!items.length) return [];
   const sparql = `SELECT ?item ?imdb WHERE { VALUES ?item { ${items.map((q) => `wd:${q}`).join(' ')} }
@@ -125,7 +126,7 @@ export async function resolveAnyTitle(key, item) {
   if (found || !item.query) return found;
   let ids = [];
   try {
-    ids = await findByFrenchTitle(item.query, { year: item.year, limit: 3 });
+    ids = await findByFrenchTitle(item.query, { year: item.year, limit: 3, strict: true });
   } catch (err) {
     console.error('Recherche Wikipédia impossible', err);
     return null;

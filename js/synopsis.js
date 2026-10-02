@@ -12,6 +12,22 @@ export function cleanFrTitle(pageTitle) {
     .trim() || null;
 }
 
+const words = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+
+/**
+ * Le titre d'une page ressemble-t-il vraiment à ce que l'on a tapé ? (pour ne pas importer un film au hasard)
+ * Vrai si les mots tapés sont presque tous dans le titre, et le titre n'a pas beaucoup plus de mots.
+ */
+export function titleMatches(query, pageTitle) {
+  const q = words(query);
+  const t = words(cleanFrTitle(pageTitle));
+  if (!q.length || !t.length) return false;
+  const inTitle = q.filter((w) => t.includes(w)).length / q.length;
+  const inQuery = t.filter((w) => q.includes(w)).length / t.length;
+  return inTitle >= 0.8 && inQuery >= 0.5;
+}
+
 /** Texte → paragraphes propres (sans sous-titres « === … === », sans lignes vides). */
 function paragraphs(text) {
   return String(text ?? '')

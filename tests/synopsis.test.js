@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanFrTitle, extractSynopsis, splitSections } from '../js/synopsis.js';
+import { cleanFrTitle, extractSynopsis, splitSections, titleMatches } from '../js/synopsis.js';
 
 const ARTICLE = `La vie est belle est un film italien réalisé par Roberto Benigni, sorti en 1997.
 
@@ -41,6 +41,15 @@ test('extractSynopsis sans section de synopsis renvoie seulement la présentatio
 
 test('splitSections ignore les sous-sections de niveau 3', () => {
   assert.deepEqual(splitSections(ARTICLE).sections.map((s) => s.heading), ['Synopsis', 'Fiche technique']);
+});
+
+test('titleMatches accepte les vrais titres et refuse les correspondances au hasard', () => {
+  assert.ok(titleMatches('Le Parrain', 'Le Parrain (film)'));
+  assert.ok(titleMatches('les evades', 'Les Évadés (film, 1994)'));
+  assert.ok(titleMatches('Le fabuleux destin d’Amélie Poulain', 'Le Fabuleux Destin d\'Amélie Poulain'));
+  assert.ok(!titleMatches('Parrain 2', 'Le Parrain, 2e partie'));
+  assert.ok(!titleMatches("Film qui n'existe pas", 'Liste de films qui n’existent pas encore au cinéma français'));
+  assert.ok(titleMatches('Dune', 'Dune (roman)')); // le roman est écarté ensuite : pas de fiche film OMDb
 });
 
 test('cleanFrTitle retire les précisions entre parenthèses', () => {
